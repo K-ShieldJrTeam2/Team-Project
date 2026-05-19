@@ -1,11 +1,10 @@
-# 🛡️ 공급망 공격 이후 탐지·차단 SecOps 자동화 파이프라인 구축
-
+# 🛡️ Falco·Tetragon으로 구현하는 Cloud-Native 런타임 보안 파이프라인
 > **eBPF · Falco · Tetragon** 기반 런타임 보안 + **Kafka · NiFi · OpenSearch · Grafana** 분석 파이프라인  
 > K-Shield Junior 16기 | 2조 | 2026.05.04 ~ 2026.05.21
 
 ---
 
-## 📌 프로젝트 개요
+## 프로젝트 개요
 
 Cloud-Native 환경에서 **GitOps 자동 배포 흐름을 악용한 공급망 공격(Supply Chain Attack)** 이후 발생하는 런타임 위협을 실시간으로 탐지·차단하고, 자동 분석·시각화까지 연결하는 End-to-End SecOps 자동화 환경을 구축·검증한 프로젝트입니다.
 
@@ -29,54 +28,12 @@ npm 타이포스쿼팅, GitLab 계정 탈취 등으로 오염된 코드가 GitOp
 
 ### 인프라 구성 (GCP GCE VM 4대)
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                  Kubernetes Cluster (VM #1 + #2 + #3)            │
-│                                                                  │
-│  ┌─────────────────┐        ┌──────────────────────────────────┐ │
-│  │  VM #1 (Master) │        │  VM #2 — Red Zone (공격 대상 영역) │ │
-│  │  Control Plane  │        │                                  │ │
-│  │  - apiserver    │        │  K-Shield Shop Pod (Node.js)     │ │
-│  │  - etcd         │        │  Falco DaemonSet                 │ │
-│  │  - scheduler    │        │  Tetragon DaemonSet              │ │
-│  └─────────────────┘        │  Falcosidekick                   │ │
-│                             │  Filebeat                        │ │
-│                             │  Argo CD                         │ │
-│                             └──────────────────────────────────┘ │
-│                                                                  │
-│                      ┌───────────────────────────────────────┐   │
-│                      │  VM #3 — Green Zone (분석 파이프라인)   │   │
-│                      │                                       │   │
-│                      │  Kafka · NiFi                         │   │
-│                      │  OpenSearch · Grafana                 │   │
-│                      │  Argo CD                              │   │
-│                      └───────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+ <img width="745" height="390" alt="image" src="https://github.com/user-attachments/assets/ba5ec763-ab07-448d-9780-360245541f14" />
 
-VM #4 — GitLab VM (Self-hosted GitLab CE, K8s 외부)
-
-외부 알람: Slack (SOC)
-```
 
 ### 데이터 흐름
 
-```
-Developer → GitLab → Argo CD → K-Shield Shop Pod
-                                      │
-                              eBPF syscall 관찰
-                           ┌──────────┴──────────┐
-                         Falco                Tetragon
-                           │                    │
-                     Falcosidekick           Filebeat
-                      ┌────┴────┐               │
-                    Slack     Kafka ←────────────┘
-                  (즉시 알람)   │
-                             NiFi (ETL)
-                               │
-                          OpenSearch
-                          ┌────┴────┐
-                    Dashboards   Grafana
-```
+<img width="840" height="436" alt="image" src="https://github.com/user-attachments/assets/70465f43-ecb0-412b-87d1-651e0de329ad" />
 
 ---
 
