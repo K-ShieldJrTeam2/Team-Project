@@ -1,0 +1,139 @@
+# K-Shield Junior 16기 2조
+# Tetragon DaemonSet — Helm values 기반 설정
+#
+# 설치 명령어:
+#   helm repo add cilium https://helm.cilium.io
+#   helm repo update
+#   helm install tetragon cilium/tetragon -n tetragon -f tetragon-values.yaml
+#
+# 배포 형태 : DaemonSet (VM #1 Master + VM #2, #3 Worker — 전체 3노드)
+# 네임스페이스 : tetragon
+# 역할 : 커널 단 인-라인 차단 (Sigkill) — Falco 탐지 계층과 분리된 차단 계층
+
+# -----------------------------------------------------------------------
+# Helm values
+# -----------------------------------------------------------------------
+# tetragon-values.yaml 로 저장 후 위 helm install 명령어에 -f 옵션으로 전달
+
+# tetragon:
+#   exportFilename: /var/run/tetragon/tetragon.log   # Filebeat가 tail하는 경로
+#   enablePolicyFilter: true                          # TracingPolicy 필터링 활성화
+#   enableK8sAPI: true                                # K8s 메타데이터 수집 활성화
+#   enableProcessCred: true                           # 프로세스 자격증명 수집
+#   enableProcessNs: true                             # 네임스페이스 정보 수집
+
+# -----------------------------------------------------------------------
+# 위 Helm 설치 후 자동 생성되는 DaemonSet 확인:
+#   kubectl get daemonset -n tetragon
+#   kubectl get pods -n tetragon -o wide
+#
+# 예상 출력:
+#   NAME       DESIRED   CURRENT   READY
+#   tetragon   3         3         3
+# -----------------------------------------------------------------------
+
+# Helm 없이 직접 적용할 경우 아래 DaemonSet manifest 사용
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: tetragon
+  namespace: tetragon
+  labels:
+    app.kubernetes.io/name: tetragon
+    project: kshield-junior-team2
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tetragon
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tetragon
+    spec:
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        # Master 노드(VM #1)에도 배포 허용
+        - operator: Exists
+          effect: NoSchedule
+      initContainers:
+        - name: export-stdout
+          image: quay.io/cilium/tetragon:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              mkdir -p /var/run/tetragon
+              touch /var/run/tetragon/tetragon.log
+          volumeMounts:
+            - name: tetragon-log
+              mountPath: /var/run/tetragon
+      containers:
+        - name: tetragon
+          image: quay.io/cilium/tetragon:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          args:
+            - --export-filename=/var/run/tetragon/tetragon.log
+            - --enable-policy-filter=true
+            - --enable-k8s-api=true
+            - --enable-process-cred=true
+            - --enable-process-ns=true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: tetragon-log
+              mountPath: /var/run/tetragon
+            - name: sys-kernel-debug
+              mountPath: /sys/kernel/debug
+            - name: bpf-maps
+              mountPath: /sys/fs/bpf
+            - name: cgroup2
+              mountPath: /run/cilium/cgroupv2
+              mountPropagation: HostToContainer
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+        # export-stdout: tetragon.log를 stdout으로 중계 (tetra CLI 연동용)
+        - name: export-stdout
+          image: quay.io/cilium/tetragon:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              tail -F /var/run/tetragon/tetragon.log
+          volumeMounts:
+            - name: tetragon-log
+              mountPath: /var/run/tetragon
+      volumes:
+        - name: tetragon-log
+          hostPath:
+            path: /var/run/tetragon
+            type: DirectoryOrCreate
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+        - name: bpf-maps
+          hostPath:
+            path: /sys/fs/bpf
+        - name: cgroup2
+          hostPath:
+            path: /run/cilium/cgroupv2
+

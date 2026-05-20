@@ -1,0 +1,11 @@
+# Tetragon 전용 네임스페이스
+# Falco(falco 네임스페이스)와 분리하여 독립적으로 운영
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tetragon
+  labels:
+    app.kubernetes.io/name: tetragon
+    project: kshield-junior-team2
+

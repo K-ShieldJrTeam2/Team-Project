@@ -1,0 +1,92 @@
+# =============================================================================
+# K-Shield Junior 16기 2조 — 시나리오 2 : 런타임 차단 (Tetragon) FINAL
+#
+# [설계 의도]
+#   Falco    → 광범위 탐지 (셸 실행, SA토큰, 민감파일, IMDS 모니터링)
+#   Tetragon → IMDS 접근 인-라인 차단 (Sigkill)
+#
+# [차단 방식] Sigkill
+#   - IMDS 접근 = 클라우드 자격증명 탈취 시도
+#   - 1회 성공으로 피해 확정되는 임계 행위
+#   - 즉시 프로세스 종료로 탈취 원천 차단
+#   - 실제 운영: replicas 3이상으로 무중단 보장
+#
+# [시스템 보호] matchBinaries NotIn
+#   - /coredns 제외 → CoreDNS 정상 동작 보장
+#   - kubelet은 host_ns 필터로 제외
+#
+# MITRE: T1552.005 (Cloud Instance Metadata API)
+#        T1552.007 (Container API — SA Token)
+# =============================================================================
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-imds-connect
+  namespace: tetragon
+  labels:
+    scenario: "kshield-scenario2"
+    action-stage: "sigkill"
+spec:
+  kprobes:
+    - call: "tcp_connect"
+      syscall: false
+      args:
+        - index: 0
+          type: "sock"
+      selectors:
+        - matchNamespaces:
+            - namespace: Net
+              operator: NotIn
+              values:
+                - "host_ns"
+          matchBinaries:
+            - operator: NotIn
+              values:
+                - "/coredns"
+                - "/usr/bin/coredns"
+                - "/usr/sbin/coredns"
+          matchArgs:
+            - index: 0
+              operator: "DAddr"
+              values:
+                - "169.254.169.254/32"
+          matchActions:
+            - action: Sigkill
+            - action: Post
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-imds-udp
+  namespace: tetragon
+  labels:
+    scenario: "kshield-scenario2"
+    action-stage: "sigkill"
+spec:
+  kprobes:
+    - call: "udp_sendmsg"
+      syscall: false
+      args:
+        - index: 0
+          type: "sock"
+      selectors:
+        - matchNamespaces:
+            - namespace: Net
+              operator: NotIn
+              values:
+                - "host_ns"
+          matchBinaries:
+            - operator: NotIn
+              values:
+                - "/coredns"
+                - "/usr/bin/coredns"
+                - "/usr/sbin/coredns"
+          matchArgs:
+            - index: 0
+              operator: "DAddr"
+              values:
+                - "169.254.169.254/32"
+          matchActions:
+            - action: Sigkill
+            - action: Post
