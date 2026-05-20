@@ -58,7 +58,7 @@ npm 타이포스쿼팅, GitLab 계정 탈취 등으로 오염된 코드가 GitOp
 
 > 공급망 공격 및 런타임 위협 시나리오 검증을 위해 **의도적으로 취약점을 포함한 쇼핑몰 애플리케이션**을 직접 제작하여 공격 대상(Target)으로 활용하였습니다.
 
-![K-Shield Shop 메인 화면](src="https://github.com/user-attachments/assets/26b2042e-d92c-4186-9115-0a3d436c142f")
+![K-Shield Shop 메인 화면](https://github.com/user-attachments/assets/26b2042e-d92c-4186-9115-0a3d436c142f)
 
 ### 애플리케이션 개요
 
