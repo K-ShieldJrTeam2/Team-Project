@@ -1,0 +1,112 @@
+# K-Shield Junior 16기 2조
+# Filebeat DaemonSet — Tetragon 로그 → Kafka(tetragon-events 토픽) 연동
+#
+# 역할:
+#   - /var/run/tetragon/tetragon.log 를 tail
+#   - Kafka 토픽 tetragon-events 로 전송
+#   - NiFi가 falco-events 와 함께 소비 → OpenSearch 통합 색인
+#
+# 주의:
+#   - kafka-service.kafka.svc.cluster.local 을 실제 Kafka 서비스 주소로 변경
+#   - 확인: kubectl get svc -n kafka
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-tetragon-config
+  namespace: tetragon
+  labels:
+    app: filebeat-tetragon
+    project: kshield-junior-team2
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+      - type: log
+        paths:
+          - /var/run/tetragon/tetragon.log
+        # Tetragon 로그는 JSON 형식
+        json.keys_under_root: true
+        json.overwrite_keys: true
+        json.add_error_key: true
+        fields:
+          source: tetragon
+        fields_under_root: true
+
+    # Kafka 출력 — falco-events 와 분리된 tetragon-events 토픽 사용
+    output.kafka:
+      hosts:
+        - "kafka-service.kafka.svc.cluster.local:9092"   # 실제 Kafka 서비스 주소로 변경
+      topic: "tetragon-events"
+      partition.round_robin:
+        reachable_only: false
+      required_acks: 1
+      compression: gzip
+      max_message_bytes: 1000000
+
+    logging.level: info
+    logging.to_files: false
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat-tetragon
+  namespace: tetragon
+  labels:
+    app: filebeat-tetragon
+    project: kshield-junior-team2
+spec:
+  selector:
+    matchLabels:
+      app: filebeat-tetragon
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: filebeat-tetragon
+    spec:
+      tolerations:
+        # Master 노드(VM #1)에도 배포 허용
+        - operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.13.0
+          args:
+            - "-c"
+            - "/etc/filebeat/filebeat.yml"
+            - "-e"
+          securityContext:
+            runAsUser: 0
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            # Tetragon 로그 디렉토리 (호스트 경로 공유)
+            - name: tetragon-log
+              mountPath: /var/run/tetragon
+              readOnly: true
+            - name: config
+              mountPath: /etc/filebeat
+              readOnly: true
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: tetragon-log
+          hostPath:
+            path: /var/run/tetragon
+            type: DirectoryOrCreate
+        - name: config
+          configMap:
+            name: filebeat-tetragon-config
+            defaultMode: 0600
+
