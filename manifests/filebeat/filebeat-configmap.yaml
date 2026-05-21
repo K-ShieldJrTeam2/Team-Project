@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: default
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+      - type: log
+        enabled: true
+        paths:
+          - /var/log/tetragon/*.log
+        json.keys_under_root: true
+        json.add_error_key: true
+
+    output.kafka:
+      hosts: ["kafka.kafka.svc.cluster.local:9092"]
+      topic: "tetragon-events"

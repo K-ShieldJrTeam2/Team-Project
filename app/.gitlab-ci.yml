@@ -1,0 +1,10 @@
+stages:
+  - scan
+  - build
+
+trivy-scan:
+  stage: scan
+  script:
+    - trivy fs . --exit-code 1 --severity MEDIUM,HIGH,CRITICAL --no-progress
+    - npm install --ignore-scripts
+  allow_failure: false

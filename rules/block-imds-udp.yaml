@@ -1,0 +1,21 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-imds-udp
+spec:
+  kprobes:
+    - call: udp_sendmsg
+      syscall: false
+      args:
+        - index: 0
+          type: sock
+        - index: 1
+          type: skb
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: DAddr
+              values:
+                - "169.254.169.254/32"
+          matchActions:
+            - action: Sigkill

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supply-chain-app
+  namespace: default
+  labels:
+    app: supply-chain-app
+    zone: red
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supply-chain-app
+  template:
+    metadata:
+      labels:
+        app: supply-chain-app
+        zone: red
+    spec:
+      nodeSelector:
+        zone: red
+      containers:
+        - name: supply-chain-app
+          image: wjdghks3829/supply-chain-app:v1.0.8
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
